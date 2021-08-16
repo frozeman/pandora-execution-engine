@@ -133,6 +133,7 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 	transactor, err := bind.NewKeyedTransactorWithChainID(privKey, chainId)
 	assert.Nil(t, err)
 	storageMap := map[common.Hash]common.Hash{}
+	commitRoots := map[common.Hash]*types.Block{}
 	nonceTracker := big.NewInt(0)
 
 	makeDepositsFunc := func(deposits []*DepositAdapter) {
@@ -164,12 +165,13 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 		pendingBlocks := make([]*types.Block, 0)
 		pendingBlocks = append(pendingBlocks, backend.pendingBlock)
 		backend.pendingState.Finalise(true)
-		_, currentErr := backend.pendingState.Commit(true)
+		commitRoot, currentErr := backend.pendingState.Commit(true)
 		assert.Nil(t, err)
 
 		inserted, currentErr := backend.blockchain.InsertChain(pendingBlocks)
 		assert.Nil(t, currentErr)
 		assert.Equal(t, 1, inserted)
+		commitRoots[commitRoot] = pendingBlocks[0]
 	}
 
 	assert.Greater(t, len(deposits), 3)
@@ -190,9 +192,20 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 
 	depositRootBytes, ok := results[0].([32]uint8)
 	assert.True(t, ok)
+	assert.Greater(t, len(commitRoots), 0)
 
 	t.Logf("Created deposit root bytes: %s", hexutil.Encode(depositRootBytes[:]))
 	t.Logf("Number of deposits made: %d", len(transactionsMade))
+	t.Logf("Starting to prepare data based on commit roots: %v", commitRoots)
+
+	for root, block := range commitRoots {
+		assert.True(t, backend.blockchain.HasState(root))
+		// TODO: debug why below if failing
+		//assert.True(t, backend.blockchain.HasBlockAndState(root, block.Number().Uint64()))
+		stateBytes, currentErr := backend.StorageAt(context.Background(), depositAddress, root, block.Number())
+		assert.Nil(t, currentErr)
+		t.Logf("stateBytes: %v", stateBytes)
+	}
 
 	// TODO: fill this storage map
 	t.Logf("StorageMap created: %v", storageMap)
