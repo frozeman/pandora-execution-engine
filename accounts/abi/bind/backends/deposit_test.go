@@ -10,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
+	crypto2 "github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/big"
@@ -78,6 +79,12 @@ func (pythonHex pythonHexString) to32Bytes() [32]byte {
 }
 
 func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
+	chainId := big.NewInt(4004181)
+	randKeyBytes := hexutil.MustDecode("0x1901a5a0f1f90abba151a9d3a33ede57253ffcff671af6c4b3033b0900285180")
+	privKey, err := crypto2.ToECDSA(randKeyBytes)
+	assert.Nil(t, err)
+
+	signerAddress := common.HexToAddress("0x897557050AFB7118EBD2529b73502C30b75106f2")
 	deposits := make([]*DepositAdapter, 0)
 	blob, err := ioutil.ReadFile(depositDataLocator)
 	assert.Nil(t, err)
@@ -92,6 +99,7 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 	assert.Nil(t, err)
 
 	depositCode := hexutil.MustDecode(depositContractHexBytecode)
+	largeBalance := big.NewInt(0).Mul(big.NewInt(10000000000000000), big.NewInt(1000000000000000000))
 
 	// Simulate backend with genesis that was not having any state
 	backend := NewSimulatedBackendWithDatabase(
@@ -99,11 +107,15 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 		core.GenesisAlloc{
 			depositAddress: core.GenesisAccount{
 				Code:    depositCode,
-				Balance: big.NewInt(0).Mul(big.NewInt(10000000000000000), big.NewInt(1000000000000000000)),
+				Balance: largeBalance,
+			},
+			signerAddress: core.GenesisAccount{
+				Balance: largeBalance,
 			},
 		},
 		4700000,
 	)
+	backend.config.ChainID = chainId
 
 	// Try to bend the state onto our needs
 	boundContract := bind.NewBoundContract(
@@ -119,13 +131,14 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 	transactionsMade := make([]*types.Transaction, 0)
 	depositValue := big.NewInt(320)
 	depositValue = depositValue.Mul(depositValue, big.NewInt(100000000000000000))
+	transactor, err := bind.NewKeyedTransactorWithChainID(privKey, chainId)
+	assert.Nil(t, err)
 
 	for index, deposit := range deposits {
-		//deposit.TurnToHashes()
 		currentTransaction, err := boundContract.Transact(&bind.TransactOpts{
-			From:     depositAddress,
+			From:     signerAddress,
 			Nonce:    nonceTracker,
-			Signer:   nil,
+			Signer:   transactor.Signer,
 			Value:    depositValue,
 			GasPrice: nil,
 			GasLimit: 0,
