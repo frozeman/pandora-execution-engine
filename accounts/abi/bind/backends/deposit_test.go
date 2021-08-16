@@ -1,6 +1,7 @@
 package backends
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/ethereum/go-ethereum/accounts/abi"
@@ -113,7 +114,7 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 				Balance: largeBalance,
 			},
 		},
-		4700000,
+		big.NewInt(0).Mul(big.NewInt(10000001), big.NewInt(159879864635498746)).Uint64(),
 	)
 	backend.config.ChainID = chainId
 
@@ -126,36 +127,73 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 		backend,
 	)
 
-	nonceTracker := big.NewInt(0)
-
 	transactionsMade := make([]*types.Transaction, 0)
 	depositValue := big.NewInt(320)
 	depositValue = depositValue.Mul(depositValue, big.NewInt(100000000000000000))
 	transactor, err := bind.NewKeyedTransactorWithChainID(privKey, chainId)
 	assert.Nil(t, err)
+	storageMap := map[common.Hash]common.Hash{}
+	nonceTracker := big.NewInt(0)
 
-	for index, deposit := range deposits {
-		currentTransaction, err := boundContract.Transact(&bind.TransactOpts{
-			From:     signerAddress,
-			Nonce:    nonceTracker,
-			Signer:   transactor.Signer,
-			Value:    depositValue,
-			GasPrice: nil,
-			GasLimit: 0,
-			Context:  nil,
-		},
-			"deposit",
-			deposit.Pubkey.toBytes(),
-			deposit.WithdrawalCredentials.toBytes(),
-			deposit.Signature.toBytes(),
-			deposit.DepositDataRoot.to32Bytes(),
-		)
+	makeDepositsFunc := func(deposits []*DepositAdapter) {
+		for index, deposit := range deposits {
+			pendingNonce, err := backend.PendingNonceAt(context.Background(), signerAddress)
+			assert.Nil(t, err)
 
-		assert.Nil(t, err, fmt.Sprintf("failed at index: %d", index))
-		nonceTracker = nonceTracker.Add(nonceTracker, big.NewInt(1))
-		transactionsMade = append(transactionsMade, currentTransaction)
+			currentTransaction, currentErr := boundContract.Transact(&bind.TransactOpts{
+				From:     signerAddress,
+				Nonce:    big.NewInt(int64(pendingNonce)),
+				Signer:   transactor.Signer,
+				Value:    depositValue,
+				GasPrice: nil,
+				GasLimit: 0,
+				Context:  nil,
+			},
+				"deposit",
+				deposit.Pubkey.toBytes(),
+				deposit.WithdrawalCredentials.toBytes(),
+				deposit.Signature.toBytes(),
+				deposit.DepositDataRoot.to32Bytes(),
+			)
+
+			assert.Nil(t, currentErr, fmt.Sprintf("failed at index: %d", index))
+			nonceTracker = nonceTracker.Add(nonceTracker, big.NewInt(1))
+			transactionsMade = append(transactionsMade, currentTransaction)
+		}
+
+		pendingBlocks := make([]*types.Block, 0)
+		pendingBlocks = append(pendingBlocks, backend.pendingBlock)
+		backend.pendingState.Finalise(true)
+		_, currentErr := backend.pendingState.Commit(true)
+		assert.Nil(t, err)
+
+		inserted, currentErr := backend.blockchain.InsertChain(pendingBlocks)
+		assert.Nil(t, currentErr)
+		assert.Equal(t, 1, inserted)
 	}
 
-	t.Log(deposits)
-	t.Log(transactionsMade)
+	assert.Greater(t, len(deposits), 3)
+	makeDepositsFunc(deposits)
+	results := make([]interface{}, 0)
+	err = boundContract.Call(
+		&bind.CallOpts{
+			Pending:     false,
+			From:        depositAddress,
+			BlockNumber: nil,
+			Context:     nil,
+		},
+		&results,
+		"get_deposit_root",
+	)
+	assert.Nil(t, err)
+	assert.Equal(t, 1, len(results))
+
+	depositRootBytes, ok := results[0].([32]uint8)
+	assert.True(t, ok)
+
+	t.Logf("Created deposit root bytes: %s", hexutil.Encode(depositRootBytes[:]))
+	t.Logf("Number of deposits made: %d", len(transactionsMade))
+
+	// TODO: fill this storage map
+	t.Logf("StorageMap created: %v", storageMap)
 }
