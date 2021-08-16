@@ -57,6 +57,26 @@ func (pythonHex pythonHexString) enrichWithHex() pythonHexString {
 	return pythonHexString(fmt.Sprintf("0x%s", pythonHex))
 }
 
+func (pythonHex pythonHexString) toBytes() []byte {
+	if len(pythonHex) < 2 {
+		panic(fmt.Sprintf("You are doing something very wrong, currentPythonHex: %s", pythonHex))
+	}
+
+	if "0x" != pythonHex[:2] {
+		pythonHex = pythonHex.enrichWithHex()
+	}
+
+	return hexutil.MustDecode(string(pythonHex))
+}
+
+func (pythonHex pythonHexString) to32Bytes() [32]byte {
+	hex := pythonHex.toBytes()
+	currentBytes := [32]byte{}
+	copy(currentBytes[:], hex[:])
+
+	return currentBytes
+}
+
 func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 	deposits := make([]*DepositAdapter, 0)
 	blob, err := ioutil.ReadFile(depositDataLocator)
@@ -79,7 +99,7 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 		core.GenesisAlloc{
 			depositAddress: core.GenesisAccount{
 				Code:    depositCode,
-				Balance: big.NewInt(256).Mul(big.NewInt(10), big.NewInt(1000000)),
+				Balance: big.NewInt(0).Mul(big.NewInt(10000000000000000), big.NewInt(1000000000000000000)),
 			},
 		},
 		4700000,
@@ -97,19 +117,25 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 	nonceTracker := big.NewInt(0)
 
 	transactionsMade := make([]*types.Transaction, 0)
+	depositValue := big.NewInt(320)
+	depositValue = depositValue.Mul(depositValue, big.NewInt(100000000000000000))
 
 	for index, deposit := range deposits {
-		deposit.TurnToHashes()
+		//deposit.TurnToHashes()
 		currentTransaction, err := boundContract.Transact(&bind.TransactOpts{
 			From:     depositAddress,
 			Nonce:    nonceTracker,
 			Signer:   nil,
-			Value:    nil,
+			Value:    depositValue,
 			GasPrice: nil,
 			GasLimit: 0,
 			Context:  nil,
 		},
 			"deposit",
+			deposit.Pubkey.toBytes(),
+			deposit.WithdrawalCredentials.toBytes(),
+			deposit.Signature.toBytes(),
+			deposit.DepositDataRoot.to32Bytes(),
 		)
 
 		assert.Nil(t, err, fmt.Sprintf("failed at index: %d", index))
