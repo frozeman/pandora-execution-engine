@@ -103,7 +103,7 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 	depositCode := hexutil.MustDecode(depositContractHexBytecode)
 	largeBalance := big.NewInt(0).Mul(big.NewInt(10000000000000000), big.NewInt(1000000000000000000))
 
-	genesisAlloc := core.GenesisAlloc{
+	genesisTestAlloc := core.GenesisAlloc{
 		depositAddress: core.GenesisAccount{
 			Code:    depositCode,
 			Balance: largeBalance,
@@ -116,7 +116,7 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 	// Simulate backend with genesis that was not having any state
 	backend := NewSimulatedBackendWithDatabase(
 		db,
-		genesisAlloc,
+		genesisTestAlloc,
 		big.NewInt(0).Mul(big.NewInt(10000001), big.NewInt(159879864635498746)).Uint64(),
 	)
 	backend.config.ChainID = chainId
@@ -222,4 +222,18 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 
 	t.Logf("StorageMap created: %v", storageMap)
 
+	currentBalance := big.NewInt(0).Mul(depositValue, big.NewInt(int64(len(transactionsMade))))
+
+	newGenesisAlloc := core.GenesisAlloc{
+		depositAddress: core.GenesisAccount{
+			Code:    depositCode,
+			Balance: currentBalance,
+			Storage: storageMap,
+		},
+	}
+
+	wholeGenesis := core.Genesis{Alloc: newGenesisAlloc}
+	marshaledAlloc, err := wholeGenesis.MarshalJSON()
+	assert.Nil(t, err)
+	t.Logf("Marshaled alloc for deposit contract: \n %s", string(marshaledAlloc))
 }
