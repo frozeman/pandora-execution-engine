@@ -200,11 +200,21 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 
 	for root, block := range commitRoots {
 		assert.True(t, backend.blockchain.HasState(root))
-		// TODO: debug why below if failing
-		//assert.True(t, backend.blockchain.HasBlockAndState(root, block.Number().Uint64()))
-		stateBytes, currentErr := backend.StorageAt(context.Background(), depositAddress, root, block.Number())
+		assert.Equal(t, block.Root(), root)
+		assert.Equal(t, backend.blockchain.CurrentBlock(), block)
+		assert.True(t, backend.blockchain.HasBlockAndState(block.Hash(), block.Number().Uint64()))
+		blockState, currentErr := backend.stateByBlockNumber(context.Background(), block.Number())
 		assert.Nil(t, currentErr)
-		t.Logf("stateBytes: %v", stateBytes)
+		assert.True(t, blockState.Exist(depositAddress))
+		dump := blockState.RawDump(
+			false,
+			false,
+			false,
+		)
+
+		for index, account := range dump.Accounts {
+			t.Logf("Index: %d, account: %v", index, account.Storage)
+		}
 	}
 
 	// TODO: fill this storage map
