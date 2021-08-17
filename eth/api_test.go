@@ -197,7 +197,7 @@ func TestStorageRangeAt(t *testing.T) {
 		},
 	}
 	for _, test := range tests {
-		result, err := storageRangeAt(state.StorageTrie(addr), test.start, test.limit)
+		result, err := StorageRangeAt(state.StorageTrie(addr), test.start, test.limit)
 		if err != nil {
 			t.Error(err)
 		}

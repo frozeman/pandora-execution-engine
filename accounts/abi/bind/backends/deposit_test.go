@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/rawdb"
 	"github.com/ethereum/go-ethereum/core/types"
 	crypto2 "github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"math/big"
@@ -102,18 +103,20 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 	depositCode := hexutil.MustDecode(depositContractHexBytecode)
 	largeBalance := big.NewInt(0).Mul(big.NewInt(10000000000000000), big.NewInt(1000000000000000000))
 
+	genesisAlloc := core.GenesisAlloc{
+		depositAddress: core.GenesisAccount{
+			Code:    depositCode,
+			Balance: largeBalance,
+		},
+		signerAddress: core.GenesisAccount{
+			Balance: largeBalance,
+		},
+	}
+
 	// Simulate backend with genesis that was not having any state
 	backend := NewSimulatedBackendWithDatabase(
 		db,
-		core.GenesisAlloc{
-			depositAddress: core.GenesisAccount{
-				Code:    depositCode,
-				Balance: largeBalance,
-			},
-			signerAddress: core.GenesisAccount{
-				Balance: largeBalance,
-			},
-		},
+		genesisAlloc,
 		big.NewInt(0).Mul(big.NewInt(10000001), big.NewInt(159879864635498746)).Uint64(),
 	)
 	backend.config.ChainID = chainId
@@ -206,17 +209,17 @@ func TestGenerateDepositMerkleTreeFromStorage(t *testing.T) {
 		blockState, currentErr := backend.stateByBlockNumber(context.Background(), block.Number())
 		assert.Nil(t, currentErr)
 		assert.True(t, blockState.Exist(depositAddress))
-		dump := blockState.RawDump(
-			false,
-			false,
-			false,
-		)
+		var start []byte
+		trie := blockState.StorageTrie(depositAddress)
+		result, currentErr := eth.StorageRangeAt(trie, start, 2558)
+		assert.Nil(t, currentErr)
 
-		for index, account := range dump.Accounts {
-			t.Logf("Index: %d, account: %v", index, account.Storage)
+		for hash, currentMap := range result.Storage {
+			t.Logf("found hash result: %s", hash.String())
+			storageMap[hash] = currentMap.Value
 		}
 	}
 
-	// TODO: fill this storage map
 	t.Logf("StorageMap created: %v", storageMap)
+
 }

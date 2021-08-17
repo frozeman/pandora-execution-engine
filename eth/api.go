@@ -435,10 +435,10 @@ func (api *PrivateDebugAPI) StorageRangeAt(blockHash common.Hash, txIndex int, c
 	if st == nil {
 		return StorageRangeResult{}, fmt.Errorf("account %x doesn't exist", contractAddress)
 	}
-	return storageRangeAt(st, keyStart, maxResult)
+	return StorageRangeAt(st, keyStart, maxResult)
 }
 
-func storageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeResult, error) {
+func StorageRangeAt(st state.Trie, start []byte, maxResult int) (StorageRangeResult, error) {
 	it := trie.NewIterator(st.NodeIterator(start))
 	result := StorageRangeResult{Storage: storageMap{}}
 	for i := 0; i < maxResult && it.Next(); i++ {
