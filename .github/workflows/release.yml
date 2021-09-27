@@ -40,7 +40,7 @@ jobs:
         run: go run ./build/ci.go install --pandora
 
       - name: Run archive for Unix
-        if: matrix.platform != 'windows*'
+        if: matrix.platform != 'windows-latest'
         run: go run ./build/ci.go archive -type tar --pandora
 
       - name: Run archive for Windows
