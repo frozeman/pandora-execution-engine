@@ -1,13 +1,21 @@
-name: Release
+name: Build and release
 
 on:
-  push:
-    branches:
-      - 'feature/sub-pendingness-verification-gh-actions'
+  create:
+    tags:
+      - v*
 
 jobs:
-  goreleaser:
-    runs-on: ubuntu-18.04
+
+  build:
+    strategy:
+      matrix:
+        go-version: [ 1.16 ]
+        platform: [ ubuntu-18.04, macos-11, windows-latest ]
+
+    runs-on: ${{ matrix.platform }}
+
+    needs: [ test ]
 
     steps:
       - name: Checkout
@@ -15,28 +23,43 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
       - name: Set up Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.16
+          go-version: ${{ matrix.go-version }}
         id: go
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@master
-        with:
-          version: latest
-          workdir: ./cmd/geth
-          args: release --rm-dist --config ../../.github/.goreleaser.yml
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-
-      - name: Request Multinet Upgrade
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      - name: Install dependencies
         run: |
-          export GH_TAG=${GITHUB_REF/refs\/tags\//};
-          curl -X POST \
-          -H "Accept: application/vnd.github.v3+json" \
-          -d '{"event_type":"upgrade dev", "client_payload": {"repository": "PANDORA", "tag": "'$GH_TAG'"}}' \
-          -u "$GITHUB_TOKEN" \
-          https://api.github.com/repos/lukso-network/l16-multinet/dispatches
+          go get -v -t -d ./...
+
+      - name: Run build
+        run: go run ./build/ci.go install --pandora
+
+      - name: Run archive for Linux
+        if: matrix.os == 'ubuntu-18.04'
+        run: go run ./build/ci.go archive -type tar --pandora
+
+      - name: Run archive for MacOS
+        if: matrix.os == 'macos-11'
+        run: go run ./build/ci.go archive -type tar --pandora
+
+      - name: Run archive for Windows
+        if: matrix.os == 'windows-latest'
+        run: go run ./build/ci.go archive --pandora
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.run_id }}
+          draft: true
+          files: |
+            ./build/bin/*.tar.gz
+            ./build/bin/*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

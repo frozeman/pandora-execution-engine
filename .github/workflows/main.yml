@@ -1,4 +1,4 @@
-name: Test and build
+name: Test
 
 on:
   push:
@@ -6,6 +6,7 @@ on:
       - '**'
 
 jobs:
+
   test:
     strategy:
       matrix:
@@ -20,8 +21,15 @@ jobs:
         with:
           go-version: ${{ matrix.go-version }}
 
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
 
       - name: Install dependencies
         run: |
@@ -32,37 +40,3 @@ jobs:
 
       - name: Test
         run: SKIP_ANDROID=true SKIP_FACEBOOK_TEST=true SKIP_GOLANG_BINDINGS_TEST=true go run ./build/ci.go test
-
-  build:
-    strategy:
-      matrix:
-        go-version: [ 1.16 ]
-        platform: [ ubuntu-18.04 ]
-
-    runs-on: ${{ matrix.platform }}
-
-    needs: [ test ]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-        with:
-          fetch-depth: 0
-
-      - name: Checkout submodules
-        uses: srt32/git-actions@v0.0.3
-        with:
-          args: git submodule update --init --recursive
-
-      - name: Set up Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: ${{ matrix.go-version }}
-        id: go
-
-      - name: Install dependencies
-        run: |
-          go get -v -t -d ./...
-
-      - name: Run build
-        run: go run ./build/ci.go install
