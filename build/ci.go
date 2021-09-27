@@ -439,6 +439,9 @@ func doArchive(cmdline []string) {
 		alltools = "pandora-alltools" + basegeth + ext
 	)
 	maybeSkipArchive(env)
+	if runtime.GOOS == "windows" {
+		geth = executablePath(path.Base("")) + `\` + "pandora" + basegeth + ext
+	}
 	if *pandora {
 		gethArchiveFiles = pandoraArchiveFiles
 	}
