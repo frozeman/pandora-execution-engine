@@ -443,7 +443,7 @@ func doArchive(cmdline []string) {
 		gethArchiveFiles = pandoraArchiveFiles
 	}
 	if err := build.WriteArchive(geth, gethArchiveFiles); err != nil {
-		log.Fatal(err)
+		log.Fatal(fmt.Sprintf("GETH: %s || GETH ARCHIVE: %v", geth, gethArchiveFiles[1]))
 	}
 	if !*pandora {
 		if err := build.WriteArchive(alltools, allToolsArchiveFiles); err != nil {
