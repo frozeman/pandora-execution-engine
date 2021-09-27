@@ -440,7 +440,7 @@ func doArchive(cmdline []string) {
 	)
 	maybeSkipArchive(env)
 	if runtime.GOOS == "windows" {
-		geth = executablePath(path.Base("")) + `\` + "pandora" + basegeth + ext
+		geth = filepath.Join(GOBIN, path.Base("")) + `\` + "pandora" + basegeth + ext
 	}
 	if *pandora {
 		gethArchiveFiles = pandoraArchiveFiles
