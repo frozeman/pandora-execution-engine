@@ -1,9 +1,9 @@
 name: Build and release
 
 on:
-  create:
-    tags:
-      - v*
+  push:
+    branches:
+      - '**'
 
 jobs:
 
@@ -39,16 +39,12 @@ jobs:
       - name: Run build
         run: go run ./build/ci.go install --pandora
 
-      - name: Run archive for Linux
-        if: matrix.os == 'ubuntu-18.04'
-        run: go run ./build/ci.go archive -type tar --pandora
-
-      - name: Run archive for MacOS
-        if: matrix.os == 'macos-11'
+      - name: Run archive for Unix
+        if: matrix.platform != 'windows*'
         run: go run ./build/ci.go archive -type tar --pandora
 
       - name: Run archive for Windows
-        if: matrix.os == 'windows-latest'
+        if: matrix.platform == 'windows-latest'
         run: go run ./build/ci.go archive --pandora
 
       - name: Create release
