@@ -70,6 +70,12 @@ var (
 		executablePath("geth"),
 	}
 
+	// Files that end up in the geth*.zip archive.
+	pandoraArchiveFiles = []string{
+		"COPYING",
+		executablePath("pandora"),
+	}
+
 	// Files that end up in the geth-alltools*.zip archive.
 	allToolsArchiveFiles = []string{
 		"COPYING",
@@ -203,9 +209,10 @@ func main() {
 
 func doInstall(cmdline []string) {
 	var (
-		dlgo = flag.Bool("dlgo", false, "Download Go and build with it")
-		arch = flag.String("arch", "", "Architecture to cross build for")
-		cc   = flag.String("cc", "", "C compiler to cross build with")
+		dlgo    = flag.Bool("dlgo", false, "Download Go and build with it")
+		arch    = flag.String("arch", "", "Architecture to cross build for")
+		cc      = flag.String("cc", "", "C compiler to cross build with")
+		pandora = flag.Bool("pandora", false, "Builds only pandora binary")
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := build.Env()
@@ -270,14 +277,23 @@ func doInstall(cmdline []string) {
 	// Default: collect all 'main' packages in cmd/ and build those.
 	packages := flag.Args()
 	if len(packages) == 0 {
-		packages = build.FindMainPackages("./cmd")
+		packages = build.FindMainPackages("./cmd/")
+	}
+
+	// Check pandora flag and build only pandora binary
+	if *pandora {
+		packages = []string{"./cmd/geth"}
 	}
 
 	// Do the build!
 	for _, pkg := range packages {
 		args := make([]string, len(gobuild.Args))
 		copy(args, gobuild.Args)
-		args = append(args, "-o", executablePath(path.Base(pkg)))
+		name := pkg
+		if pkg == "./cmd/geth" && *pandora {
+			name = "pandora"
+		}
+		args = append(args, "-o", executablePath(path.Base(name)))
 		args = append(args, pkg)
 		build.MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
 	}
@@ -402,6 +418,7 @@ func doArchive(cmdline []string) {
 		signer  = flag.String("signer", "", `Environment variable holding the signing key (e.g. LINUX_SIGNING_KEY)`)
 		signify = flag.String("signify", "", `Environment variable holding the signify key (e.g. LINUX_SIGNIFY_KEY)`)
 		upload  = flag.String("upload", "", `Destination to upload the archives (usually "gethstore/builds")`)
+		pandora = flag.Bool("pandora", false, `If name of the binary is pandora, use this flag to archive pandora build`)
 		ext     string
 	)
 	flag.CommandLine.Parse(cmdline)
@@ -417,16 +434,21 @@ func doArchive(cmdline []string) {
 	var (
 		env = build.Env()
 
-		basegeth = archiveBasename(*arch, params.ArchiveVersion(env.Commit))
-		geth     = "geth-" + basegeth + ext
-		alltools = "geth-alltools-" + basegeth + ext
+		basegeth = archiveBasename(*arch, "")
+		geth     = executablePath(path.Base("")) + "/" + "pandora" + basegeth + ext
+		alltools = "pandora-alltools" + basegeth + ext
 	)
 	maybeSkipArchive(env)
+	if *pandora {
+		gethArchiveFiles = pandoraArchiveFiles
+	}
 	if err := build.WriteArchive(geth, gethArchiveFiles); err != nil {
 		log.Fatal(err)
 	}
-	if err := build.WriteArchive(alltools, allToolsArchiveFiles); err != nil {
-		log.Fatal(err)
+	if !*pandora {
+		if err := build.WriteArchive(alltools, allToolsArchiveFiles); err != nil {
+			log.Fatal(err)
+		}
 	}
 	for _, archive := range []string{geth, alltools} {
 		if err := archiveUpload(archive, *upload, *signer, *signify); err != nil {
@@ -446,7 +468,7 @@ func archiveBasename(arch string, archiveVersion string) string {
 	if arch == "ios" {
 		platform = "ios-all"
 	}
-	return platform + "-" + archiveVersion
+	return archiveVersion + "-" + platform
 }
 
 func archiveUpload(archive string, blobstore string, signer string, signifyVar string) error {
@@ -499,7 +521,7 @@ func maybeSkipArchive(env build.Environment) {
 		log.Printf("skipping because this is a cron job")
 		os.Exit(0)
 	}
-	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") && !strings.HasPrefix(env.Tag, "p-") {
+	if env.Branch != "master" && !strings.HasPrefix(env.Tag, "v1.") && !strings.HasPrefix(env.Tag, "v0.") && !strings.HasPrefix(env.Tag, "") {
 		log.Printf("skipping because branch %q, tag %q is not on the whitelist", env.Branch, env.Tag)
 		os.Exit(0)
 	}
