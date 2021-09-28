@@ -11,7 +11,7 @@ jobs:
     strategy:
       matrix:
         go-version: [ 1.16 ]
-        platform: [ ubuntu-18.04, macos-11, windows-latest ]
+        platform: [ ubuntu-18.04 ]
 
     runs-on: ${{ matrix.platform }}
 
@@ -37,7 +37,7 @@ jobs:
           go get -v -t -d ./...
 
       - name: Run build
-        run: go run ./build/ci.go install --pandora
+        run: make geth-linux
 
       - name: Create release
         uses: softprops/action-gh-release@v1
