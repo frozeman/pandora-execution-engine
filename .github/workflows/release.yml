@@ -39,21 +39,12 @@ jobs:
       - name: Run build
         run: go run ./build/ci.go install --pandora
 
-      - name: Run archive for Unix
-        if: matrix.platform != 'windows-latest'
-        run: go run ./build/ci.go archive -type tar --pandora
-
-      - name: Run archive for Windows
-        if: matrix.platform == 'windows-latest'
-        run: go run ./build/ci.go archive --pandora
-
       - name: Create release
         uses: softprops/action-gh-release@v1
         with:
           name: Release
           draft: true
           files: |
-            ./build/bin/*.tar.gz
-            ./build/bin/*.zip
+            ./build/bin/pandora-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -291,7 +291,8 @@ func doInstall(cmdline []string) {
 		copy(args, gobuild.Args)
 		name := pkg
 		if pkg == "./cmd/geth" && *pandora {
-			name = "pandora"
+			basegeth := archiveBasename(runtime.GOARCH, "")
+			name = "pandora" + basegeth
 		}
 		args = append(args, "-o", executablePath(path.Base(name)))
 		args = append(args, pkg)
