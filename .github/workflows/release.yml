@@ -37,7 +37,9 @@ jobs:
           go get -v -t -d ./...
 
       - name: Run build
-        run: go run ./build/ci.go install --pandora
+        run: |
+          go run ./build/ci.go install --pandora
+          go run ./build/ci.go install --pandora --arch arm64
 
       - name: Create release
         uses: softprops/action-gh-release@v1
