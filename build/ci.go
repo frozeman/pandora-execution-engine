@@ -289,7 +289,7 @@ func doInstall(cmdline []string) {
 	architecture := runtime.GOARCH
 	var uname syscall.Utsname
 	if err := syscall.Uname(&uname); err == nil {
-		architecture = uname.Machine[:]
+		architecture = int8ToStr(uname.Machine[:])
 	}
 
 	// Do the build!
