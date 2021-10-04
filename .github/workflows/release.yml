@@ -2,8 +2,8 @@ name: Build and release
 
 on:
   push:
-    branches:
-      - 'feature/github-actions-ci-cd'
+    tags:
+      - "v*"
 
 jobs:
 
@@ -38,7 +38,7 @@ jobs:
 
       - name: Run build
         run: |
-          go run ./build/ci.go install --pandora
+          go run ./build/pan_ci.go install --pandora
 
       - name: Create release
         uses: softprops/action-gh-release@v1
