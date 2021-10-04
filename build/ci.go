@@ -285,13 +285,19 @@ func doInstall(cmdline []string) {
 		packages = []string{"./cmd/geth"}
 	}
 
+	architecture := runtime.GOARCH
+	var uname syscall.Utsname
+	if err := syscall.Uname(&uname); err == nil {
+		architecture = uname.Machine[:]
+	}
+
 	// Do the build!
 	for _, pkg := range packages {
 		args := make([]string, len(gobuild.Args))
 		copy(args, gobuild.Args)
 		name := pkg
 		if pkg == "./cmd/geth" && *pandora {
-			basegeth := archiveBasename(runtime.GOARCH, "")
+			basegeth := archiveBasename(architecture, "")
 			name = "pandora" + basegeth
 		}
 		args = append(args, "-o", executablePath(path.Base(name)))
@@ -462,7 +468,7 @@ func doArchive(cmdline []string) {
 }
 
 func archiveBasename(arch string, archiveVersion string) string {
-	platform := runtime.GOOS + "-" + arch
+	platform := strings.Title(runtime.GOOS) + "-" + arch
 	if arch == "arm" {
 		platform += os.Getenv("GOARM")
 	}
@@ -1230,4 +1236,16 @@ func doPurge(cmdline []string) {
 	if err := build.AzureBlobstoreDelete(auth, blobs); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// A utility to convert the values to proper strings.
+func int8ToStr(arr []int8) string {
+	b := make([]byte, 0, len(arr))
+	for _, v := range arr {
+		if v == 0x00 {
+			break
+		}
+		b = append(b, byte(v))
+	}
+	return string(b)
 }
