@@ -2,8 +2,8 @@ name: Build and release
 
 on:
   push:
-    branches:
-      - 'feature/github-actions-ci-cd'
+    tags:
+      - "v*"
 
 jobs:
 
