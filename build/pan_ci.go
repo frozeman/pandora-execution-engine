@@ -286,10 +286,16 @@ func doInstall(cmdline []string) {
 	}
 
 	architecture := runtime.GOARCH
-	cmd := exec.Command("uname", "-m")
-	stdout, err := cmd.Output()
-	if err == nil {
-		architecture = string(stdout)
+	if runtime.GOOS != "windows" {
+		cmd := exec.Command("uname", "-m")
+		stdout, err := cmd.Output()
+		if err == nil {
+			architecture = string(stdout)
+		}
+	}
+
+	if runtime.GOARCH == "amd64" && runtime.GOOS == "windows" {
+		architecture = "x86_64"
 	}
 
 	// Do the build!
@@ -469,7 +475,7 @@ func doArchive(cmdline []string) {
 }
 
 func archiveBasename(arch string, archiveVersion string) string {
-	platform := runtime.GOOS + "-" + arch
+	platform := strings.Title(runtime.GOOS) + "-" + arch
 	if arch == "arm" {
 		platform += os.Getenv("GOARM")
 	}
