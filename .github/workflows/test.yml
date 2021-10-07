@@ -6,7 +6,6 @@ on:
       - '**'
 
 jobs:
-
   test:
     strategy:
       matrix:

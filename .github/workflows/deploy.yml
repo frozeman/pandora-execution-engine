@@ -6,7 +6,6 @@ on:
       - 'feature/gh-actions-trigger-cd'
 
 jobs:
-
   deploy:
     strategy:
       matrix:
