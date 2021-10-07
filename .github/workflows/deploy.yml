@@ -1,0 +1,70 @@
+name: Build and deploy
+
+on:
+  push:
+    branches:
+      - develop
+
+jobs:
+
+  build:
+    strategy:
+      matrix:
+        go-version: [ 1.16 ]
+        platform: [ ubuntu-18.04 ]
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v2
+        with:
+          submodules: recursive
+
+      - name: Set up Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go-version }}
+        id: go
+
+      - name: Install dependencies
+        run: |
+          go get -v -t -d ./...
+
+      - name: Run build
+        run: |
+          go run ./build/pan_ci.go install --pandora
+
+      - name: Delete old tag and release
+        uses: dev-drprasad/delete-tag-and-release@v0.2.0
+        with:
+          delete_release: true
+          tag_name: v0.1.0-develop
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release v0.1.0-develop
+          tag_name: v0.1.0-develop
+          draft: false
+          files: |
+            ./build/bin/pandora-*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Request network upgrade
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -X POST \
+          -H "Accept: application/vnd.github.v3+json" \
+          -d '{"event_type":"upgrade_dev", "client_payload": {"repository": "PANDORA", "tag": "v0.1.0-develop"}}' \
+          -u "$GITHUB_TOKEN" \
+          https://api.github.com/repos/lukso-network/network-helm-charts/dispatches
