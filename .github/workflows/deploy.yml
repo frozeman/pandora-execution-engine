@@ -53,6 +53,7 @@ jobs:
         with:
           name: Release v0.1.0-develop
           tag_name: v0.1.0-develop
+          target_commitish: ${{ github.head_ref }}.${{ github.sha }}
           draft: false
           files: |
             ./build/bin/pandora-*
