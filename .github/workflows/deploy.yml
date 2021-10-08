@@ -50,13 +50,13 @@ jobs:
       - name: Create tag
         uses: actions/github-script@v3
         with:
-          github-token: ${{ secrets.GH_DISPATCH_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             github.git.createRef({
               owner: context.repo.owner,
               repo: context.repo.repo,
               ref: "refs/tags/v0.1.0-develop",
-              sha: ${{ github.sha }}
+              sha: context.sha
             })
 
       - name: Create release
