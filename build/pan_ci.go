@@ -290,7 +290,7 @@ func doInstall(cmdline []string) {
 		cmd := exec.Command("uname", "-m")
 		stdout, err := cmd.Output()
 		if err == nil {
-			architecture = string(stdout)
+			architecture = strings.TrimSuffix(string(stdout), "\n")
 		}
 	}
 
