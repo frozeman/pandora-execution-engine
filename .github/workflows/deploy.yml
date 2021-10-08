@@ -52,11 +52,21 @@ jobs:
         with:
           name: v0.1.0-develop
           tag_name: v0.1.0-develop
+          draft: false
           target_commitish: ${{ github.sha }}
           files: |
             ./build/bin/pandora-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update draft to release
+        run: |
+          curl \
+            -u user:${{ secrets.GH_DISPATCH_TOKEN }} \
+            -X PATCH \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/lukso-network/pandora-execution-engine/releases/${{ steps.last_release.outputs.release_id }} \
+            -d '{"tag_name":"v0.1.0-develop", "name": "v0.1.0-develop", "draft": "false"}'
 
       - name: Repository Dispatch
         uses: peter-evans/repository-dispatch@v1
