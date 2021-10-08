@@ -52,7 +52,7 @@ jobs:
         with:
           name: v0.1.0-develop
           tag_name: v0.1.0-develop
-          draft: false
+          target_commitish: ${{ github.sha }}
           files: |
             ./build/bin/pandora-*
         env:
