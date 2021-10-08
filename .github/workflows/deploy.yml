@@ -47,6 +47,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Create tag
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: "refs/tags/v0.1.0-develop",
+              sha: ${{ github.sha }}
+            })
+
       - name: Create release
         uses: softprops/action-gh-release@v1
         with:
@@ -58,15 +70,6 @@ jobs:
             ./build/bin/pandora-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Update draft to release
-        run: |
-          curl \
-            -u user:${{ secrets.GH_DISPATCH_TOKEN }} \
-            -X PATCH \
-            -H "Accept: application/vnd.github.v3+json" \
-            https://api.github.com/repos/lukso-network/pandora-execution-engine/releases/${{ steps.last_release.outputs.release_id }} \
-            -d '{"tag_name":"v0.1.0-develop", "name": "v0.1.0-develop", "draft": "false"}'
 
       - name: Repository Dispatch
         uses: peter-evans/repository-dispatch@v1
