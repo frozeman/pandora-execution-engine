@@ -15,6 +15,26 @@ jobs:
     runs-on: ${{ matrix.platform }}
 
     steps:
+      - name: Delete previous tag and release
+        uses: dev-drprasad/delete-tag-and-release@v0.2.0
+        with:
+          delete_release: true
+          tag_name: v0.1.0-develop
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create tag
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            github.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: "refs/tags/v0.1.0-develop",
+              sha: context.sha
+            })
+
       - name: Checkout
         uses: actions/checkout@v2
         with:
@@ -39,30 +59,11 @@ jobs:
         run: |
           go run ./build/pan_ci.go install --pandora
 
-      - name: Delete previous tag and release
-        uses: dev-drprasad/delete-tag-and-release@v0.2.0
-        with:
-          delete_release: true
-          tag_name: v0.1.0-develop
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create tag
-        uses: actions/github-script@v3
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            github.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: "refs/tags/v0.1.0-develop",
-              sha: context.sha
-            })
-
       - name: Create release
         uses: softprops/action-gh-release@v1
         with:
           draft: false
+          tag_name: v0.1.0-develop
           target_commitish: ${{ github.sha }}
           files: |
             ./build/bin/pandora-*
