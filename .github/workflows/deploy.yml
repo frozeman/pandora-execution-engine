@@ -63,8 +63,6 @@ jobs:
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/v0.1.0-develop')
         with:
-          name: v0.1.0-develop
-          tag_name: v0.1.0-develop
           draft: false
           target_commitish: ${{ github.sha }}
           files: |
@@ -72,10 +70,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Repository Dispatch
-        uses: peter-evans/repository-dispatch@v1
-        with:
-          token: ${{ secrets.GH_DISPATCH_TOKEN }}
-          repository: lukso-network/network-helm-charts
-          event-type: upgrade_dev
-          client-payload: '{"repository": "PANDORA", "tag": "v0.1.0-develop"}'
+#      - name: Repository Dispatch
+#        uses: peter-evans/repository-dispatch@v1
+#        with:
+#          token: ${{ secrets.GH_DISPATCH_TOKEN }}
+#          repository: lukso-network/network-helm-charts
+#          event-type: upgrade_dev
+#          client-payload: '{"repository": "PANDORA", "tag": "v0.1.0-develop"}'
