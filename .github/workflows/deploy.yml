@@ -39,7 +39,7 @@ jobs:
         run: |
           go run ./build/pan_ci.go install --pandora
 
-      - name: Delete old tag and release
+      - name: Delete previous tag and release
         uses: dev-drprasad/delete-tag-and-release@v0.2.0
         with:
           delete_release: true
