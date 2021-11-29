@@ -1,4 +1,4 @@
-name: Build and deploy
+name: Build and release develop
 
 on:
   push:
@@ -69,11 +69,3 @@ jobs:
             ./build/bin/pandora-*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Repository Dispatch
-        uses: peter-evans/repository-dispatch@v1
-        with:
-          token: ${{ secrets.GH_DISPATCH_TOKEN }}
-          repository: lukso-network/network-helm-charts
-          event-type: upgrade_dev
-          client-payload: '{"repository": "PANDORA", "tag": "v0.1.0-develop"}'
