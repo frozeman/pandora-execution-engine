@@ -59,7 +59,9 @@ type ChainReader interface {
 
 	// GetBlockByHash retrieves a block from the database by hash
 	GetBlockByHash(hash common.Hash) *types.Block
+}
 
+type ChainHandler interface {
 	RevertPandora(oldBlock, newBlock *types.Block) error
 }
 

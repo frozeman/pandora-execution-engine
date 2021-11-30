@@ -44,4 +44,7 @@ var (
 
 	// ErrSigFailedToVerify for pandora if signature not verified
 	ErrSigFailedToVerify    = errors.New("signature did not verify")
+
+	ErrInvalidSlotSequence = errors.New("slot numbers are not in ascending order")
+
 )

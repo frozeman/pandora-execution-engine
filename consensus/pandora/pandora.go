@@ -75,6 +75,8 @@ type Pandora struct {
 	epochInfosMu   sync.RWMutex
 	epochInfos     *lru.Cache
 	requestedEpoch uint64
+
+	pandoraChainRevert consensus.ChainHandler
 }
 
 func New(
@@ -129,6 +131,10 @@ func New(
 //EnableTestMode enables test mode for pandora engine so that least possible checks are happened
 func (p *Pandora) EnableTestMode() {
 	p.skipBLSValidation = true
+}
+
+func (p *Pandora) SetChainHandler(handler consensus.ChainHandler) {
+	p.pandoraChainRevert = handler
 }
 
 func (p *Pandora) Start(chain consensus.ChainReader) {

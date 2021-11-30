@@ -48,8 +48,9 @@ var (
 type testTxPool struct {
 	pool map[common.Hash]*types.Transaction // Hash map of collected transactions
 
-	txFeed event.Feed   // Notification feed to allow waiting for inclusion
-	lock   sync.RWMutex // Protects the transaction pool
+	txFeed           event.Feed // Notification feed to allow waiting for inclusion
+	txRevertDoneFeed event.Feed
+	lock             sync.RWMutex // Protects the transaction pool
 }
 
 // newTestTxPool creates a mock transaction pool.
@@ -110,6 +111,14 @@ func (p *testTxPool) Pending(enforceTips bool) (map[common.Address]types.Transac
 // send events to the given channel.
 func (p *testTxPool) SubscribeNewTxsEvent(ch chan<- core.NewTxsEvent) event.Subscription {
 	return p.txFeed.Subscribe(ch)
+}
+
+func (p *testTxPool) SubscribeTxRevertDoneEvent(ch chan<- *types.Header) event.Subscription {
+	return p.txRevertDoneFeed.Subscribe(ch)
+}
+
+func (p *testTxPool) RevertPandoraTxPool(oldBlock, newBlock *types.Block) error {
+	return nil
 }
 
 // testHandler is a live implementation of the Ethereum protocol handler, just

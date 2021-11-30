@@ -71,6 +71,10 @@ type txPool interface {
 	// SubscribeNewTxsEvent should return an event subscription of
 	// NewTxsEvent and send events to the given channel.
 	SubscribeNewTxsEvent(chan<- core.NewTxsEvent) event.Subscription
+
+	SubscribeTxRevertDoneEvent(ch chan<- *types.Header) event.Subscription
+
+	RevertPandoraTxPool(oldBlock, newBlock *types.Block) error
 }
 
 // handlerConfig is the collection of initialization parameters to create a full
@@ -123,6 +127,9 @@ type handler struct {
 	chainSync *chainSyncer
 	wg        sync.WaitGroup
 	peerWG    sync.WaitGroup
+
+	revertNewHeadCh  chan *types.Header
+	revertNewHeadSub event.Subscription
 }
 
 // newHandler returns a handler for all Ethereum chain management protocol.
@@ -393,6 +400,11 @@ func (h *handler) unregisterPeer(id string) {
 	}
 }
 
+func (h *handler) RevertPandora(oldBlock, newBlock *types.Block) error {
+	log.Info("chain revert requested", "newChainHeadNumber", h.chain.CurrentBlock().Number(), "newChainHeadHash", h.chain.CurrentBlock().Hash())
+	return h.txpool.RevertPandoraTxPool(oldBlock, newBlock)
+}
+
 func (h *handler) Start(maxPeers int) {
 	h.maxPeers = maxPeers
 
@@ -401,6 +413,13 @@ func (h *handler) Start(maxPeers int) {
 	h.txsCh = make(chan core.NewTxsEvent, txChanSize)
 	h.txsSub = h.txpool.SubscribeNewTxsEvent(h.txsCh)
 	go h.txBroadcastLoop()
+
+	if h.chain.IsPandora() {
+		h.wg.Add(1)
+		h.revertNewHeadCh = make(chan *types.Header)
+		h.revertNewHeadSub = h.txpool.SubscribeTxRevertDoneEvent(h.revertNewHeadCh)
+		go h.txRevertPandoraLoop()
+	}
 
 	// broadcast mined blocks
 	h.wg.Add(1)
@@ -414,8 +433,11 @@ func (h *handler) Start(maxPeers int) {
 }
 
 func (h *handler) Stop() {
-	h.txsSub.Unsubscribe()        // quits txBroadcastLoop
-	h.minedBlockSub.Unsubscribe() // quits blockBroadcastLoop
+	h.txsSub.Unsubscribe()           // quits txBroadcastLoop
+	h.minedBlockSub.Unsubscribe()    // quits blockBroadcastLoop
+	if h.chain.IsPandora() {
+		h.revertNewHeadSub.Unsubscribe() // quites txRevertPandoraLoop
+	}
 
 	// Quit chainSync and txsync64.
 	// After this is done, no new peers will be accepted.
@@ -528,6 +550,22 @@ func (h *handler) txBroadcastLoop() {
 		case event := <-h.txsCh:
 			h.BroadcastTransactions(event.Txs)
 		case <-h.txsSub.Err():
+			return
+		}
+	}
+}
+
+func (h *handler) txRevertPandoraLoop() {
+	defer h.wg.Done()
+	for {
+		select {
+		case revertedHeader := <-h.revertNewHeadCh:
+			err := h.chain.SetHead(revertedHeader.Number.Uint64())
+			if err != nil {
+				log.Error("pandora chain revert failed", "error", err)
+			}
+			log.Info("chain revert request executed", "newChainHeadNumber", h.chain.CurrentBlock().Number(), "newChainHeadHash", h.chain.CurrentBlock().Hash())
+		case <-h.revertNewHeadSub.Err():
 			return
 		}
 	}

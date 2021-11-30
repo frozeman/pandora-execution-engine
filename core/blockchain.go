@@ -351,7 +351,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 			}
 		}
 	}
-	if bc.isPandora() {
+	if bc.IsPandora() {
 		latestFinalizedSlot := rawdb.ReadLatestFinalizedSlotNumber(bc.db)
 		if lastFinalizedSlot != nil {
 			finalizedBlock := bc.findBlockBySlotNumber(*latestFinalizedSlot)
@@ -452,7 +452,7 @@ func NewBlockChain(db ethdb.Database, cacheConfig *CacheConfig, chainConfig *par
 	}
 
 	// check if we are running pandora engine. If so, only then call the go routine
-	if bc.isPandora() {
+	if bc.IsPandora() {
 		// consensus engine is on pandora mode. Now run the orchestrator go routine
 		go func() {
 			ctx := context.Background()
@@ -500,8 +500,8 @@ func (bc *BlockChain) GetVMConfig() *vm.Config {
 	return &bc.vmConfig
 }
 
-// isPandora returns if we are running pandora engine
-func (bc *BlockChain) isPandora() bool {
+// IsPandora returns if we are running pandora engine
+func (bc *BlockChain) IsPandora() bool {
 	_, isPandoraEnigne := bc.engine.(*pandora.Pandora)
 	return isPandoraEnigne
 }
@@ -1712,7 +1712,7 @@ func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
 			return err
 		}
 	}
-	if bc.isPandora() {
+	if bc.IsPandora() {
 		if _, err := bc.notifyAndGetConfirmationFromOrchestrator(block); err != nil {
 			return err
 		}
@@ -1737,7 +1737,7 @@ func (bc *BlockChain) writeBlockWithState(block *types.Block, receipts []*types.
 
 	// verification is done. Now if pandora mode is running then push it into the queue
 	// After that, wait for response of the orchestrator client.
-	if bc.isPandora() {
+	if bc.IsPandora() {
 		stat, err := bc.notifyAndGetConfirmationFromOrchestrator(block)
 		if err != nil {
 			log.Error("found error while verify and notifying orchestrator", "error", err)
@@ -2385,152 +2385,6 @@ func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (i
 		return bc.insertChain(blocks, false)
 	}
 	return 0, nil
-}
-
-func (bc *BlockChain) RevertPandora(oldBlock, newBlock *types.Block) error {
-	var (
-		oldChain    types.Blocks
-		commonBlock *types.Block
-
-		deletedTxs types.Transactions
-
-		deletedLogs [][]*types.Log
-
-		// collectLogs collects the logs that were generated or removed during
-		// the processing of the block that corresponds with the given hash.
-		// These logs are later announced as deleted or reborn
-		collectLogs = func(hash common.Hash, removed bool) {
-			number := bc.hc.GetBlockNumber(hash)
-			if number == nil {
-				return
-			}
-			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
-
-			var logs []*types.Log
-			for _, receipt := range receipts {
-				for _, log := range receipt.Logs {
-					l := *log
-					if removed {
-						l.Removed = true
-					}
-					logs = append(logs, &l)
-				}
-			}
-			if len(logs) > 0 {
-				if removed {
-					deletedLogs = append(deletedLogs, logs)
-				}
-			}
-		}
-		// mergeLogs returns a merged log slice with specified sort order.
-		mergeLogs = func(logs [][]*types.Log, reverse bool) []*types.Log {
-			var ret []*types.Log
-			if reverse {
-				for i := len(logs) - 1; i >= 0; i-- {
-					ret = append(ret, logs[i]...)
-				}
-			} else {
-				for i := 0; i < len(logs); i++ {
-					ret = append(ret, logs[i]...)
-				}
-			}
-			return ret
-		}
-	)
-	// Reduce the longer chain to the same number as the shorter one
-	if oldBlock.NumberU64() > newBlock.NumberU64() {
-		// Old chain is longer, gather all transactions and logs as deleted ones
-		for ; oldBlock != nil && oldBlock.NumberU64() != newBlock.NumberU64(); oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1) {
-			oldChain = append(oldChain, oldBlock)
-			deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
-			collectLogs(oldBlock.Hash(), true)
-		}
-	}
-	if oldBlock == nil {
-		return fmt.Errorf("invalid old chain")
-	}
-	if newBlock == nil {
-		return fmt.Errorf("invalid new chain")
-	}
-	// Both sides of the reorg are at the same number, reduce both until the common
-	// ancestor is found
-	for {
-		// If the common ancestor was found, bail out
-		if oldBlock.Hash() == newBlock.Hash() {
-			commonBlock = oldBlock
-			break
-		}
-		// Remove an old block as well as stash away a new block
-		oldChain = append(oldChain, oldBlock)
-		deletedTxs = append(deletedTxs, oldBlock.Transactions()...)
-		collectLogs(oldBlock.Hash(), true)
-
-		// Step back with both chains
-		oldBlock = bc.GetBlock(oldBlock.ParentHash(), oldBlock.NumberU64()-1)
-		if oldBlock == nil {
-			return fmt.Errorf("invalid old chain")
-		}
-	}
-	// Ensure the user sees large reorgs
-	if len(oldChain) > 0 {
-		logFn := log.Info
-		msg := "Chain revert detected"
-		logFn(msg, "number", commonBlock.Number(), "hash", commonBlock.Hash(),
-			"drop", len(oldChain), "dropfrom", oldChain[0].Hash(), "addfrom", newBlock.Hash())
-	}
-
-	rawdb.WriteHeadBlockHash(bc.db, newBlock.Hash())
-
-	// Degrade the chain markers if they are explicitly reverted.
-	// In theory we should update all in-memory markers in the
-	// last step, however the direction of SetHead is from high
-	// to low, so it's safe the update in-memory markers directly.
-	bc.currentBlock.Store(newBlock)
-	headBlockGauge.Update(int64(newBlock.NumberU64()))
-
-	if currentFastBlock := bc.CurrentFastBlock(); currentFastBlock != nil && newBlock.Header().Number.Uint64() < currentFastBlock.NumberU64() {
-		newHeadFastBlock := bc.GetBlock(newBlock.Header().Hash(), newBlock.Header().Number.Uint64())
-		// If either blocks reached nil, reset to the genesis state
-		if newHeadFastBlock == nil {
-			newHeadFastBlock = bc.genesisBlock
-		}
-		rawdb.WriteHeadFastBlockHash(bc.db, newHeadFastBlock.Hash())
-
-		// Degrade the chain markers if they are explicitly reverted.
-		// In theory we should update all in-memory markers in the
-		// last step, however the direction of SetHead is from high
-		// to low, so it's safe the update in-memory markers directly.
-		bc.currentFastBlock.Store(newHeadFastBlock)
-		headFastBlockGauge.Update(int64(newHeadFastBlock.NumberU64()))
-	}
-
-	// Delete useless indexes right now which includes the non-canonical
-	// transaction indexes, canonical chain indexes which above the head.
-	indexesBatch := bc.db.NewBatch()
-	for _, tx := range deletedTxs {
-		rawdb.DeleteTxLookupEntry(indexesBatch, tx.Hash())
-	}
-	// Delete any canonical number assignments above the new head
-	number := bc.CurrentBlock().NumberU64()
-	for i := number + 1; ; i++ {
-		hash := rawdb.ReadCanonicalHash(bc.db, i)
-		if hash == (common.Hash{}) {
-			break
-		}
-		rawdb.DeleteCanonicalHash(indexesBatch, i)
-	}
-	if err := indexesBatch.Write(); err != nil {
-		log.Crit("Failed to delete useless indexes", "err", err)
-	}
-	// If any logs need to be fired, do it now. In theory we could avoid creating
-	// this goroutine if there are no events to fire, but realistcally that only
-	// ever happens if we're reorging empty blocks, which will only happen on idle
-	// networks where performance is not an issue either way.
-	if len(deletedLogs) > 0 {
-		bc.rmLogsFeed.Send(RemovedLogsEvent{mergeLogs(deletedLogs, true)})
-	}
-
-	return nil
 }
 
 // reorg takes two blocks, an old chain and a new chain and will reconstruct the

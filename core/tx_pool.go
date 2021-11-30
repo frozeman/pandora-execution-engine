@@ -22,6 +22,7 @@ import (
 	"math/big"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -122,6 +123,8 @@ var (
 
 // TxStatus is the current status of a transaction as seen by the pool.
 type TxStatus uint
+
+type TxPoolRevertStatus bool
 
 const (
 	TxStatusUnknown TxStatus = iota
@@ -256,6 +259,10 @@ type TxPool struct {
 	reorgDoneCh     chan chan struct{}
 	reorgShutdownCh chan struct{}  // requests shutdown of scheduleReorgLoop
 	wg              sync.WaitGroup // tracks loop, scheduleReorgLoop
+
+	revertedBlock     chan *types.Block
+	isRevertTriggered atomic.Value
+	revertDoneFeed    event.Feed
 }
 
 type txpoolResetRequest struct {
@@ -285,6 +292,7 @@ func NewTxPool(config TxPoolConfig, chainconfig *params.ChainConfig, chain block
 		reorgDoneCh:     make(chan chan struct{}),
 		reorgShutdownCh: make(chan struct{}),
 		gasPrice:        new(big.Int).SetUint64(config.PriceLimit),
+		revertedBlock:   make(chan *types.Block),
 	}
 	pool.locals = newAccountSet(pool.signer)
 	for _, addr := range config.Locals {
@@ -344,6 +352,12 @@ func (pool *TxPool) loop() {
 			if ev.Block != nil {
 				pool.requestReset(head.Header(), ev.Block.Header())
 				head = ev.Block
+			}
+
+		case revertedBlock := <-pool.revertedBlock:
+			if revertedBlock != nil {
+				log.Info("block is reverted and tx_pool is updating it's head", "newBlockNumber", revertedBlock.NumberU64(), "newBlockHash", revertedBlock.Hash())
+				head = revertedBlock
 			}
 
 		// System shutdown.
@@ -414,6 +428,18 @@ func (pool *TxPool) Stop() {
 // starts sending event to the given channel.
 func (pool *TxPool) SubscribeNewTxsEvent(ch chan<- NewTxsEvent) event.Subscription {
 	return pool.scope.Track(pool.txFeed.Subscribe(ch))
+}
+
+// SubscribeTxRevertDoneEvent emits event when we receive tx revert done signal
+func (pool *TxPool) SubscribeTxRevertDoneEvent(ch chan<- *types.Header) event.Subscription {
+	return pool.scope.Track(pool.revertDoneFeed.Subscribe(ch))
+}
+
+func (pool *TxPool) RevertPandoraTxPool(oldBlock, newBlock *types.Block) error {
+	pool.isRevertTriggered.Store(TxPoolRevertStatus(true))
+	pool.requestReset(oldBlock.Header(), newBlock.Header())
+	pool.revertedBlock <- newBlock
+	return nil
 }
 
 // GasPrice returns the current gas price enforced by the transaction pool.
@@ -1115,6 +1141,16 @@ func (pool *TxPool) scheduleReorgLoop() {
 // runReorg runs reset and promoteExecutables on behalf of scheduleReorgLoop.
 func (pool *TxPool) runReorg(done chan struct{}, reset *txpoolResetRequest, dirtyAccounts *accountSet, events map[common.Address]*txSortedMap) {
 	defer close(done)
+	defer func() {
+		if val := pool.isRevertTriggered.Load(); val != nil {
+			isReverted := val.(TxPoolRevertStatus)
+			if isReverted && reset != nil && reset.newHead != nil {
+				pool.revertDoneFeed.Send(reset.newHead)
+				log.Info("pandora tx revert done and already notified", "newHeadNumber", reset.newHead.Number.Uint64())
+				pool.isRevertTriggered.Store(TxPoolRevertStatus(false))
+			}
+		}
+	}()
 
 	var promoteAddrs []common.Address
 	if dirtyAccounts != nil && reset == nil {

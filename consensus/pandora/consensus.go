@@ -1,6 +1,7 @@
 package pandora
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -81,6 +82,10 @@ func (p *Pandora) VerifyHeaders(chain consensus.ChainHeaderReader, headers []*ty
 
 			if i == 0 {
 				parent = chain.GetHeader(headers[0].ParentHash, headers[0].Number.Uint64()-1)
+				if !isAscendingSlot(p.chain.CurrentBlock().Header(), headers[0]) {
+					log.Error("slot numbers are not in ascending order", "canonical chain head blockNumber", p.chain.CurrentBlock().NumberU64(), "received header blockNumber", headers[0].Number.Uint64())
+					results <- consensus.ErrInvalidSlotSequence
+				}
 			} else if headers[i-1].Hash() == headers[i].ParentHash {
 				parent = headers[i-1]
 			}
