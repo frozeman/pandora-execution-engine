@@ -235,12 +235,12 @@ func (p *Pandora) processEpochInfo(info *EpochInfoPayload) error {
 
 func (p *Pandora) RevertBlockAndTxs(newBlock *types.Block) error {
 	oldBlock := p.chain.CurrentBlock()
-	p.SetReorgProgressing()
 	if newBlock == nil || oldBlock == nil {
 		return errors.New("invalid block pointer. revert not possible")
 	}
 	if p.pandoraChainRevert == nil {
 		return errors.New("eventHandler is not initiated yet in pandora engine. Reorg failed")
 	}
+	p.SetReorgProgressing()
 	return p.pandoraChainRevert.RevertPandora(oldBlock, newBlock)
 }
