@@ -18,6 +18,7 @@ package eth
 
 import (
 	"errors"
+	"github.com/ethereum/go-ethereum/consensus/pandora"
 	"math"
 	"math/big"
 	"sync"
@@ -564,6 +565,10 @@ func (h *handler) txRevertPandoraLoop() {
 			if err != nil {
 				log.Error("pandora chain revert failed", "error", err)
 			}
+			pandoraEngine := h.chain.Engine()
+			panEngineReference, _ := pandoraEngine.(*pandora.Pandora)
+			panEngineReference.ResetReorgProgressing()
+
 			log.Info("chain revert request executed", "newChainHeadNumber", h.chain.CurrentBlock().Number(), "newChainHeadHash", h.chain.CurrentBlock().Hash())
 		case <-h.revertNewHeadSub.Err():
 			return

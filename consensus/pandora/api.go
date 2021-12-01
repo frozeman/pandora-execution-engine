@@ -28,6 +28,9 @@ func (api *API) GetShardingWork(parentHash common.Hash, blockNumber uint64, slot
 	if api.pandora == nil {
 		return emptyRes, errors.New("pandora engine not supported")
 	}
+	if api.pandora.IsReorgProgressing() {
+		return emptyRes, errors.New("pandora reorg is still progressing")
+	}
 
 	var (
 		shardingInfoCh = make(chan [4]string, 1)

@@ -3,6 +3,7 @@ package pandora
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/math"
@@ -40,6 +41,7 @@ var (
 
 // DialRPCFn dials to the given endpoint
 type DialRPCFn func(endpoint string) (*rpc.Client, error)
+type ReorgProgressionStatus bool
 
 // Pandora
 type Pandora struct {
@@ -77,6 +79,7 @@ type Pandora struct {
 	requestedEpoch uint64
 
 	pandoraChainRevert consensus.ChainHandler
+	isReorgProgressing atomic.Value
 }
 
 func New(
@@ -131,6 +134,23 @@ func New(
 //EnableTestMode enables test mode for pandora engine so that least possible checks are happened
 func (p *Pandora) EnableTestMode() {
 	p.skipBLSValidation = true
+}
+
+func (p *Pandora) SetReorgProgressing () {
+	p.isReorgProgressing.Store(ReorgProgressionStatus(true))
+}
+
+func (p *Pandora) IsReorgProgressing() ReorgProgressionStatus {
+	if val := p.isReorgProgressing.Load(); val != nil {
+		reorgStat, _ := val.(ReorgProgressionStatus)
+		return reorgStat
+	}
+	return false
+}
+
+func (p *Pandora) ResetReorgProgressing () {
+	log.Debug("resetting reorg process")
+	p.isReorgProgressing.Store(ReorgProgressionStatus(false))
 }
 
 func (p *Pandora) SetChainHandler(handler consensus.ChainHandler) {
